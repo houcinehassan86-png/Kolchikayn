@@ -112,11 +112,22 @@ main{padding-bottom:150px}
 .mini{position:fixed;inset-inline:12px;bottom:calc(66px + env(safe-area-inset-bottom,0px));z-index:29;max-width:536px;margin:0 auto;background:var(--cta);color:#fff;border:0;border-radius:14px;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;font:inherit;font-weight:700;box-shadow:0 6px 18px rgba(0,0,0,.25);cursor:pointer}
 .em{display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center;padding:36px 16px;color:var(--mut)}.em b{color:var(--ink);font-size:18px}.em svg{color:var(--pri);margin-bottom:6px}
 .ml{display:flex;flex-direction:column;gap:10px}.ml a,.ml button{display:flex;justify-content:space-between;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;color:var(--ink);text-decoration:none;font:inherit;font-weight:700;cursor:pointer;width:100%}
+.add.alt{background:transparent;color:var(--pri);border:1.5px solid var(--pri)}
+.adds{display:flex;gap:6px}.adds .add{flex:1;padding:9px 4px;font-size:14px}
+.hc .adds{flex-direction:column}.pa .qty+.add{margin-top:6px}
+.hi{margin:0 2px 10px;font-weight:700;color:var(--ink)}
+.bn{display:flex;gap:10px;overflow-x:auto;scroll-snap-type:x mandatory;margin-bottom:4px}
+.bi{flex:0 0 92%;scroll-snap-align:center;position:relative;border-radius:16px;overflow:hidden;aspect-ratio:16/7;background:var(--card);border:1px solid var(--line)}
+.bn .bi:only-child{flex-basis:100%}.bi img{width:100%;height:100%;object-fit:cover;display:block}
+.bi span{position:absolute;inset-inline:0;bottom:0;padding:18px 12px 8px;color:#fff;font-weight:800;background:linear-gradient(transparent,rgba(0,0,0,.65))}
+.oh{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-bottom:1px solid var(--line);font-weight:700}
+.stt{font-size:12px;padding:2px 10px;border-radius:99px;background:var(--acc);color:#fff}.stt.ok{background:#1b7f4b}
+.ob{padding:10px 12px}
 </style>
 </head>
 <body>
 <main id="app"></main>
-<input id="chg" type="file" accept="image/*" hidden>
+<input id="chg" type="file" accept="image/*" hidden><input id="chgc" type="file" accept="image/*" hidden>
 <div id="lb" data-a="closebig" hidden></div>
 <div id="rc" hidden></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4"></script>
@@ -132,7 +143,7 @@ let code=ls.g("code"),cat=null,cart={},flt="all",q="",msg="",tab="p",adm=null,cu
 const A={};
 
 /* ---------- الزبون ---------- */
-let sending=false,fails=0,lockUntil=0;
+let sending=false,fails=0,lockUntil=0,extras={banners:[],cartons:{},orders:[],catimgs:{}};
 const norm=s=>String(s==null?"":s).toLowerCase().replace(/[ً-ْـ]/g,"").replace(/[أإآ]/g,"ا").replace(/ى/g,"ي").replace(/ة/g,"ه");
 const jget=k=>{try{return JSON.parse(ls.g(k)||"null")}catch(e){return null}};
 const saveCart=()=>{const e=Object.entries(cart).filter(x=>x[1]>0);ls.s("cart:"+code,e.length?JSON.stringify(Object.fromEntries(e)):null)};
@@ -142,6 +153,7 @@ async function load(){
   if(error){msg="تعذر الاتصال بالخادم";return loginView()}
   if(!data){ls.s("cart:"+code,null);ls.s("last:"+code,null);ls.s("code",null);code=null;msg="الرمز غير صحيح";return loginView()}
   cat=data;msg="";
+  try{const r=await sb.rpc("get_extras",{p_code:code}),d=r&&r.data;extras={banners:(d&&d.banners)||[],cartons:(d&&d.cartons)||{},orders:(d&&d.orders)||[],catimgs:(d&&d.catimgs)||{}}}catch(e){extras={banners:[],cartons:{},orders:[],catimgs:{}}}
   const ids=new Set(cat.products.map(p=>String(p.id))),sv=jget("cart:"+code)||{};
   cart=Object.fromEntries(Object.entries(sv).filter(e=>ids.has(e[0])&&e[1]>0));
   history.replaceState({v:view,cid:catId},"");
@@ -174,9 +186,12 @@ const total=()=>money(cat.products.reduce((s,p)=>s+(cart[p.id]||0)*p.price,0));
 const pic=p=>p.image_url?`<img src="${esc(p.image_url)}" alt="" loading="lazy">`:"📦";
 const inCat=(p,cid)=>cid==="none"?!p.category_id:p.category_id===cid;
 function cats(){const l=(cat.categories||[]).filter(c=>cat.products.some(p=>p.category_id===c.id));if(l.length&&cat.products.some(p=>!p.category_id))l.push({id:"none",name:"منتجات أخرى"});return l}
-const cimg=c=>{const p=cat.products.find(x=>inCat(x,c.id)&&x.image_url);return p?`<img src="${esc(p.image_url)}" alt="" loading="lazy">`:"📦"};
-function ctl(p){const n=cart[p.id]||0;return n?`<div class="qty"><button data-a="dec" data-id="${p.id}" aria-label="إنقاص">−</button><input class="qn" type="number" inputmode="numeric" min="0" max="500" value="${n}" data-id="${p.id}" aria-label="الكمية"><button data-a="inc" data-id="${p.id}" aria-label="زيادة">+</button></div>`:`<button class="add" data-a="inc" data-id="${p.id}">+ أضف للسلة</button>`}
-function rowHtml(p,line){const n=cart[p.id]||0;return `<div class="pr" data-row="${p.id}"><div class="pi" data-a="big" data-id="${p.id}">${pic(p)}${p.is_new?'<span class="tag">جديد</span>':""}</div><div class="pm"><div class="pp">${p.price} <small>درهم</small></div><div class="pn">${esc(p.name)}</div>${line&&n?`<div class="pl">المجموع: ${money(n*p.price)} درهم</div>`:""}<div class="pa">${ctl(p)}</div></div></div>`}
+const cimg=c=>{const u=(extras.catimgs||{})[c.id]||c.image_url;if(u)return `<img src="${esc(u)}" alt="" loading="lazy">`;const p=cat.products.find(x=>inCat(x,c.id)&&x.image_url);return p?`<img src="${esc(p.image_url)}" alt="" loading="lazy">`:"📦"};
+const cq=p=>+(extras.cartons&&extras.cartons[p.id])||0;
+function ctl(p){const n=cart[p.id]||0,k=cq(p),cb=k>1?`<button class="add alt" data-a="carton" data-id="${p.id}">+ كرطونة (${k})</button>`:"";
+  return n?`<div class="qty"><button data-a="dec" data-id="${p.id}" aria-label="إنقاص">−</button><input class="qn" type="number" inputmode="numeric" min="0" max="500" value="${n}" data-id="${p.id}" aria-label="الكمية"><button data-a="inc" data-id="${p.id}" aria-label="زيادة">+</button></div>${cb}`
+   :`<div class="adds"><button class="add" data-a="inc" data-id="${p.id}">+ قطعة</button>${cb}</div>`}
+function rowHtml(p,line){const n=cart[p.id]||0;return `<div class="pr" data-row="${p.id}"><div class="pi" data-a="big" data-id="${p.id}">${pic(p)}${p.is_new?'<span class="tag">جديد</span>':""}</div><div class="pm"><div class="pp">${p.price} <small>درهم</small></div><div class="pn">${esc(p.name)}</div>${cq(p)>1?`<div class="pl">الكرطونة: ${cq(p)} قطعة = ${money(cq(p)*p.price)} درهم</div>`:""}${line&&n?`<div class="pl">المجموع: ${money(n*p.price)} درهم</div>`:""}<div class="pa">${ctl(p)}</div></div></div>`}
 const hcard=p=>`<div class="hc" data-row="${p.id}"><div class="pi" data-a="big" data-id="${p.id}">${pic(p)}</div><div class="pp">${p.price} <small>درهم</small></div><div class="pn">${esc(p.name)}</div><div class="pa">${ctl(p)}</div></div>`;
 function barsHtml(){
   const n=cnt(),on=view==="cat"||view==="search"?"home":view;
@@ -195,7 +210,9 @@ function shopView(){
   if(view==="home"){
     hd=`<header class="hd"><img src="lockup-white.png" alt="كولشي كاين"><button class="ib" data-a="search" aria-label="بحث">${IC.search}</button></header>`;
     const nw=cat.products.filter(p=>p.is_new);
-    h=`<section class="ban"><b>مرحبا ${esc(cat.customer)} 👋</b><span>اطلب سلعتك في ثواني</span></section>`
+    const bn=extras.banners||[];
+    h=(bn.length?`<p class="hi">مرحبا ${esc(cat.customer)} 👋</p><div class="bn">${bn.map(b=>`<div class="bi" ${b.category_id?`data-a="opencat" data-id="${esc(b.category_id)}"`:""}><img src="${esc(b.image_url)}" alt="${esc(b.title||"")}" loading="lazy">${b.title?`<span>${esc(b.title)}</span>`:""}</div>`).join("")}</div>`
+      :`<section class="ban"><b>مرحبا ${esc(cat.customer)} 👋</b><span>اطلب سلعتك في ثواني</span></section>`)
      +(nw.length?`<h2 class="st">جديدنا<a data-a="nav" data-v="new">عرض الكل ›</a></h2><div class="hs">${nw.slice(0,10).map(hcard).join("")}</div>`:"")
      +`<h2 class="st">السلعة</h2>`
      +(cs.length?`<div class="cg">${cs.map(c=>`<button class="ct" data-a="opencat" data-id="${esc(c.id)}"><span class="ci">${cimg(c)}</span><span class="cl">${esc(c.name)}</span></button>`).join("")}</div>`
@@ -217,9 +234,17 @@ function shopView(){
     h=l.length?l.map(p=>rowHtml(p,true)).join("")+`<div class="rtot"><span>المجموع</span><b>${total()} درهم</b></div><button class="btn" data-a="review" style="width:100%">إرسال الطلب</button>`
       :EMPTY("السلة فارغة","أضف منتجات من الصفحة الرئيسية")+`<button class="btn" data-a="nav" data-v="home" style="width:100%">تصفح المنتجات</button>`;
   }else if(view==="orders"){
-    hd=sub("طلباتي");const last=(jget("last:"+code)||[]).map(i=>({p:cat.products.find(x=>String(x.id)===String(i.id)),q:i.qty})).filter(x=>x.p);
-    h=last.length?`<p>آخر طلب أرسلته من هذا الجهاز</p><div class="rv">${last.map(x=>`<div class="rl"><div class="rn">${esc(x.p.name)}</div><div class="rq">${x.q} × ${x.p.price}</div><div class="rt2">${money(x.q*x.p.price)} درهم</div></div>`).join("")}</div><div class="rtot"><span>المجموع</span><b>${money(last.reduce((s,x)=>s+x.q*x.p.price,0))} درهم</b></div><button class="btn" data-a="again" style="width:100%">↻ أعد هذا الطلب</button>`
-      :EMPTY("لا توجد طلبات سابقة","ستظهر هنا آخر طلبية ترسلها");
+    hd=sub("طلباتي");const hist=extras.orders||[];
+    if(hist.length){
+      h=hist.map((o,i)=>{const d=new Date(o.created_at),done=o.status==="done";
+        return `<div class="rv" style="margin-bottom:12px"><div class="oh"><span>${d.toLocaleDateString("fr-FR")} ${d.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})}</span><span class="stt ${done?"ok":""}">${done?"تم التسليم":"قيد المعالجة"}</span></div>`
+          +(o.items||[]).map(l=>`<div class="rl"><div class="rn">${esc(l.name)}</div><div class="rq">${l.qty} × ${l.price}</div><div class="rt2">${money(l.qty*l.price)} درهم</div></div>`).join("")
+          +`<div class="ob"><div class="rtot" style="padding:0 0 8px"><span>المجموع</span><b>${money(o.total)} درهم</b></div><button class="btn alt sm" data-a="againo" data-i="${i}">↻ أعد هذا الطلب</button></div></div>`}).join("");
+    }else{
+      const last=(jget("last:"+code)||[]).map(i=>({p:cat.products.find(x=>String(x.id)===String(i.id)),q:i.qty})).filter(x=>x.p);
+      h=last.length?`<p>آخر طلب أرسلته من هذا الجهاز</p><div class="rv">${last.map(x=>`<div class="rl"><div class="rn">${esc(x.p.name)}</div><div class="rq">${x.q} × ${x.p.price}</div><div class="rt2">${money(x.q*x.p.price)} درهم</div></div>`).join("")}</div><div class="rtot"><span>المجموع</span><b>${money(last.reduce((s,x)=>s+x.q*x.p.price,0))} درهم</b></div><button class="btn" data-a="again" style="width:100%">↻ أعد هذا الطلب</button>`
+        :EMPTY("لا توجد طلبات سابقة","ستظهر هنا طلباتك السابقة");
+    }
   }else{
     hd=sub("المزيد");
     h=`<div class="ml"><a href="https://wa.me/${WHATSAPP}" target="_blank" rel="noopener"><span>💬 تواصل معنا عبر واتساب</span><span>›</span></a><button data-a="logout"><span>🚪 تسجيل الخروج</span><span>›</span></button></div><div class="ft"><img class="lk" src="lockup-white.png" alt="كولشي كاين"><div class="tg"><img src="hs.png" alt="">معاً ... لنمو تجارتك</div></div>`;
@@ -235,6 +260,10 @@ function upd(id){
   const b=$("#bars");if(b)b.innerHTML=barsHtml();
 }
 A.nav=d=>go(d.v);
+A.againo=d=>{const o=(extras.orders||[])[+d.i];if(!o)return;let miss=0;
+  (o.items||[]).forEach(l=>{const p=cat.products.find(x=>x.name===l.name);if(p&&l.qty>0)cart[p.id]=Math.min(500,l.qty);else miss++});
+  saveCart();go("cart");if(miss){msg=miss+" منتج من هذا الطلب لم يعد متوفرا.";shopView()}};
+A.carton=d=>{const p=cat.products.find(x=>String(x.id)===String(d.id));if(!p)return;cart[d.id]=Math.min(500,(cart[d.id]||0)+cq(p));saveCart();upd(d.id)};
 A.opencat=d=>go("cat",d.id);
 A.catsel=d=>{catId=d.id;history.replaceState({v:"cat",cid:catId},"");shopView()};
 A.search=()=>{focusS=true;go("search")};
@@ -274,12 +303,13 @@ A.send=async()=>{
 async function admin(){
   const{data:{session}}=await sb.auth.getSession();
   if(!session){stopPoll();return adminLogin()}
-  const[p,c,o,k]=await Promise.all([
+  const[p,c,o,k,bn]=await Promise.all([
     sb.from("products").select("*").order("created_at",{ascending:false}),
     sb.from("customers").select("*").order("created_at",{ascending:false}),
     sb.from("orders").select("*,customers(name,phone,address)").order("created_at",{ascending:false}).limit(200),
-    sb.from("categories").select("*").order("created_at")]);
-  adm={p:p.data||[],c:c.data||[],o:o.data||[],k:k.data||[]};adminView();startPoll();
+    sb.from("categories").select("*").order("created_at"),
+    sb.from("banners").select("*").order("created_at",{ascending:false})]);
+  adm={p:p.data||[],c:c.data||[],o:o.data||[],k:k.data||[],b:bn.data||[]};adminView();startPoll();
 }
 function adminLogin(){app.innerHTML=`<h1>دخول المدير</h1><input id="em" type="text" inputmode="email" autocomplete="username" placeholder="البريد الإلكتروني"><input id="pw" type="password" autocomplete="current-password" placeholder="كلمة السر"><div class="err">${esc(msg)}</div><button class="btn" data-a="alogin">دخول</button>`}
 A.alogin=async()=>{const{error}=await sb.auth.signInWithPassword({email:$("#em").value.trim(),password:$("#pw").value});if(error){msg="بيانات الدخول غير صحيحة";return adminLogin()}msg="";admin()};
@@ -287,7 +317,7 @@ A.toshop=()=>{location.hash=""};
 A.alogout=async()=>{stopPoll();adm=null;await sb.auth.signOut();admin()};
 A.tab=d=>{tab=d.v;msg="";if(tab==="o"){unseen=0;document.title="كولشي كاين"}adminView()};
 async function db(q){const{error}=await q;msg=error?"خطأ: "+error.message:"";await admin()}
-let heldP=null;
+let heldP=null,heldB=null,heldK=null;
 function hold(f){if(!f)return Promise.resolve(null);return f.arrayBuffer().then(b=>new Blob([b],{type:f.type||"image/jpeg"}))}
 function shrink(f){return new Promise((res,rej)=>{const u=URL.createObjectURL(f),im=new Image();im.onerror=()=>rej(new Error("تعذر قراءة الصورة"));im.onload=()=>{URL.revokeObjectURL(u);
 const W=im.width,H=im.height,k=Math.min(1,160/Math.max(W,H)),sw=Math.max(4,W*k|0),sh=Math.max(4,H*k|0);
@@ -307,19 +337,25 @@ A.addp=async()=>{
   const n=$("#pn").value.trim(),pr=parseFloat($("#pp").value);
   if(!n||!(pr>0)){msg="أدخل الاسم والسعر";return adminView()}
   let u=null;try{const f=heldP?await heldP:null;if(f)u=await upload(f)}catch(e){msg="فشل رفع الصورة: "+(e&&e.message?e.message:"تعذر قراءة الصورة");return adminView()}
-  db(sb.from("products").insert({name:n,price:pr,is_new:$("#pnw").checked,image_url:u,category_id:$("#pcat").value||null}));
+  const row={name:n,price:pr,is_new:$("#pnw").checked,image_url:u,category_id:$("#pcat").value||null},cqv=parseInt($("#pcq").value,10);if(cqv>1)row.carton_qty=cqv;db(sb.from("products").insert(row));
 };
 var editId=null;
 A.edit=d=>{editId=d.id;msg="";adminView()};
 A.canceledit=()=>{editId=null;adminView()};
-A.saveedit=d=>{const n=$("#en").value.trim(),pr=parseFloat($("#ep").value);if(!n||!(pr>0)){msg="أدخل اسما وسعرا صحيحا";return adminView()}editId=null;db(sb.from("products").update({name:n,price:pr}).eq("id",d.id))};
+A.saveedit=d=>{const n=$("#en").value.trim(),pr=parseFloat($("#ep").value);if(!n||!(pr>0)){msg="أدخل اسما وسعرا صحيحا";return adminView()}const cv=$("#ecq").value.trim(),up={name:n,price:pr};if(cv!==""&&!(parseInt(cv,10)>1)){msg="عدد القطع في الكرطونة يجب أن يكون أكبر من 1";return adminView()}if(cv!==""||P(d.id).carton_qty!=null)up.carton_qty=cv===""?null:parseInt(cv,10);editId=null;db(sb.from("products").update(up).eq("id",d.id))};
 A.imgp=d=>{curId=d.id;$("#chg").click()};
 $("#chg").addEventListener("change",async function(){const f0=this.files[0];if(!f0||!curId)return;let f;try{f=await hold(f0)}catch(e){msg="فشل رفع الصورة: تعذر قراءة الصورة";return adminView()}this.value="";
   try{const u=await upload(f);db(sb.from("products").update({image_url:u}).eq("id",curId))}catch(e){msg="فشل رفع الصورة: "+(e&&e.message?e.message:"تعذر قراءة الصورة");adminView()}});
 A.tgnew=d=>db(sb.from("products").update({is_new:!P(d.id).is_new}).eq("id",d.id));
 A.tgact=d=>db(sb.from("products").update({active:!P(d.id).active}).eq("id",d.id));
 A.delp=d=>{if(confirm("حذف المنتج؟"))db(sb.from("products").delete().eq("id",d.id))};
-A.addcat=()=>{const n=$("#kn").value.trim();if(!n){msg="اكتب اسم الصنف";return adminView()}db(sb.from("categories").insert({name:n}))};
+let curCatId=null;
+A.addcat=async()=>{const n=$("#kn").value.trim();if(!n){msg="اكتب اسم الصنف";return adminView()}
+  let u=null;try{const f=heldK?await heldK:null;if(f)u=await upload(f)}catch(e){msg="فشل رفع صورة الصنف: "+(e&&e.message?e.message:"تعذر قراءة الصورة");return adminView()}
+  const row={name:n};if(u)row.image_url=u;db(sb.from("categories").insert(row))};
+A.catimg=d=>{curCatId=d.id;$("#chgc").click()};
+$("#chgc").addEventListener("change",async function(){const f0=this.files[0];if(!f0||!curCatId)return;let f;try{f=await hold(f0)}catch(e){msg="تعذر قراءة الصورة";return adminView()}this.value="";
+  try{const u=await upload(f);db(sb.from("categories").update({image_url:u}).eq("id",curCatId))}catch(e){msg="فشل رفع الصورة: "+(e&&e.message?e.message:"");adminView()}});
 A.delcat=d=>{if(confirm("حذف الصنف؟ تبقى منتجاته بدون صنف."))db(sb.from("categories").delete().eq("id",d.id))};
 A.addc=()=>{const n=$("#cn").value.trim(),c=$("#cc").value.trim(),ph=cleanPh($("#cph").value);
   if(!n||c.length<6){msg="أدخل الاسم ورمزا من 6 أرقام على الأقل";return adminView()}
@@ -392,14 +428,28 @@ A.pushtog=async()=>{
     reg.showNotification("✅ تم تفعيل الإشعارات",{body:"ستصلك إشعارات الطلبات الجديدة على هذا الجهاز",icon:"icon-192.png",dir:"rtl",lang:"ar"});
   }catch(e){msg="تعذر تفعيل الإشعارات: "+(e&&e.message?e.message:e);adminView()}
 };
+function shrinkWide(f){return new Promise((res,rej)=>{const u=URL.createObjectURL(f),im=new Image();im.onerror=()=>rej(new Error("تعذر قراءة الصورة"));im.onload=()=>{URL.revokeObjectURL(u);
+  const k=Math.min(1,1200/im.width),w=Math.round(im.width*k),h=Math.round(im.height*k),c=document.createElement("canvas");c.width=w;c.height=h;c.getContext("2d").drawImage(im,0,0,w,h);
+  c.toBlob(b=>b?res(b):rej(new Error("تعذر تصغير الصورة")),"image/jpeg",.82)};im.src=u})}
+async function uploadBanner(f){const b=await shrinkWide(f),n="bn-"+Date.now()+".jpg";const{error}=await sb.storage.from("product-images").upload(n,b,{contentType:"image/jpeg"});if(error)throw error;return sb.storage.from("product-images").getPublicUrl(n).data.publicUrl}
+A.addb=async()=>{
+  let f=null;try{f=heldB?await heldB:null}catch(e){}
+  if(!f){msg="اختر صورة البانر أولا";return adminView()}
+  let u;try{u=await uploadBanner(f)}catch(e){msg="فشل رفع الصورة: "+(e&&e.message?e.message:"");return adminView()}
+  db(sb.from("banners").insert({title:$("#bt").value.trim()||null,image_url:u,category_id:$("#bcat").value||null,active:true}));
+};
+A.tgb=d=>{const b=adm.b.find(x=>x.id===d.id);db(sb.from("banners").update({active:!b.active}).eq("id",d.id))};
+A.delb=d=>{if(confirm("حذف البانر؟"))db(sb.from("banners").delete().eq("id",d.id))};
 function adminView(){
-  heldP=null;
-  const tabs=[["p","المنتجات"],["c","الزبناء"],["o","الطلبات"+(unseen&&tab!=="o"?" ("+unseen+")":"")]].map(t=>`<button class="chip ${tab===t[0]?"on":""}" data-a="tab" data-v="${t[0]}">${t[1]}</button>`).join("");
+  heldP=null;heldB=null;heldK=null;
+  const tabs=[["p","المنتجات"],["c","الزبناء"],["b","البانرات"],["o","الطلبات"+(unseen&&tab!=="o"?" ("+unseen+")":"")]].map(t=>`<button class="chip ${tab===t[0]?"on":""}" data-a="tab" data-v="${t[0]}">${t[1]}</button>`).join("");
   let h="";
-  if(tab==="p")h=`<h2>الأصناف</h2><div class="row"><input id="kn" type="text" placeholder="اسم صنف جديد"><div><button class="btn sm" data-a="addcat">إضافة صنف</button></div></div><div class="chips">${adm.k.map(k=>`<span class="chip">${esc(k.name)} <a data-a="delcat" data-id="${k.id}" style="cursor:pointer;color:var(--bad)">✕</a></span>`).join("")}</div><h2>إضافة منتج</h2><input id="pn" type="text" placeholder="اسم المنتج"><input id="pp" type="number" inputmode="decimal" placeholder="السعر بالدرهم"><select id="pcat"><option value="">بدون صنف</option>${adm.k.map(k=>`<option value="${k.id}">${esc(k.name)}</option>`).join("")}</select><input id="pf" type="file" accept="image/*"><div class="price" id="pfn"></div><label><input id="pnw" type="checkbox" checked> منتج جديد</label><div class="acts"><button class="btn sm" data-a="addp">إضافة</button></div>`+
-    adm.p.map(p=>p.id===editId?`<div class="item"><div class="info"><input id="en" type="text" value="${esc(p.name)}" placeholder="اسم المنتج"><input id="ep" type="number" inputmode="decimal" value="${p.price}" placeholder="السعر بالدرهم"><div class="acts"><button class="btn sm" data-a="saveedit" data-id="${p.id}">حفظ</button><button class="btn alt sm" data-a="canceledit">إلغاء</button></div></div></div>`:`<div class="item ${p.active?"":"off"}"><div class="ico">${p.image_url?`<img src="${esc(p.image_url)}" alt="">`:"📦"}</div><div class="info"><div class="name">${esc(p.name)}${p.is_new?'<span class="new">جديد</span>':""}</div><div class="price">${p.price} درهم${p.active?"":" — مخفي"}</div><select data-cs data-id="${p.id}" style="margin:6px 0 0"><option value="">بدون صنف</option>${adm.k.map(k=>`<option value="${k.id}" ${p.category_id===k.id?"selected":""}>${esc(k.name)}</option>`).join("")}</select><div class="acts"><button class="btn alt sm" data-a="edit" data-id="${p.id}">تعديل</button><button class="btn alt sm" data-a="imgp" data-id="${p.id}">صورة</button><button class="btn alt sm" data-a="tgnew" data-id="${p.id}">جديد/عادي</button><button class="btn alt sm" data-a="tgact" data-id="${p.id}">${p.active?"إخفاء":"إظهار"}</button><button class="btn alt sm" data-a="delp" data-id="${p.id}">حذف</button></div></div></div>`).join("");
+  if(tab==="p")h=`<h2>الأصناف</h2><input id="kn" type="text" placeholder="اسم صنف جديد"><input id="kf" type="file" accept="image/*"><div class="price" id="kfn">صورة الصنف تظهر للزبون في الصفحة الرئيسية (اختيارية)</div><div class="acts"><button class="btn sm" data-a="addcat">إضافة صنف</button></div>${adm.k.map(k=>`<div class="item"><div class="ico">${k.image_url?`<img src="${esc(k.image_url)}" alt="">`:"📂"}</div><div class="info"><div class="name">${esc(k.name)}</div><div class="acts"><button class="btn alt sm" data-a="catimg" data-id="${k.id}">تغيير الصورة</button><button class="btn alt sm" data-a="delcat" data-id="${k.id}">حذف</button></div></div></div>`).join("")}<h2>إضافة منتج</h2><input id="pn" type="text" placeholder="اسم المنتج"><input id="pp" type="number" inputmode="decimal" placeholder="السعر بالدرهم"><input id="pcq" type="number" inputmode="numeric" placeholder="عدد القطع في الكرطونة (اختياري)"><select id="pcat"><option value="">بدون صنف</option>${adm.k.map(k=>`<option value="${k.id}">${esc(k.name)}</option>`).join("")}</select><input id="pf" type="file" accept="image/*"><div class="price" id="pfn"></div><label><input id="pnw" type="checkbox" checked> منتج جديد</label><div class="acts"><button class="btn sm" data-a="addp">إضافة</button></div>`+
+    adm.p.map(p=>p.id===editId?`<div class="item"><div class="info"><input id="en" type="text" value="${esc(p.name)}" placeholder="اسم المنتج"><input id="ep" type="number" inputmode="decimal" value="${p.price}" placeholder="السعر بالدرهم"><input id="ecq" type="number" inputmode="numeric" value="${p.carton_qty||""}" placeholder="عدد القطع في الكرطونة (اختياري)"><div class="acts"><button class="btn sm" data-a="saveedit" data-id="${p.id}">حفظ</button><button class="btn alt sm" data-a="canceledit">إلغاء</button></div></div></div>`:`<div class="item ${p.active?"":"off"}"><div class="ico">${p.image_url?`<img src="${esc(p.image_url)}" alt="">`:"📦"}</div><div class="info"><div class="name">${esc(p.name)}${p.is_new?'<span class="new">جديد</span>':""}</div><div class="price">${p.price} درهم${p.carton_qty?" — كرطونة: "+p.carton_qty:""}${p.active?"":" — مخفي"}</div><select data-cs data-id="${p.id}" style="margin:6px 0 0"><option value="">بدون صنف</option>${adm.k.map(k=>`<option value="${k.id}" ${p.category_id===k.id?"selected":""}>${esc(k.name)}</option>`).join("")}</select><div class="acts"><button class="btn alt sm" data-a="edit" data-id="${p.id}">تعديل</button><button class="btn alt sm" data-a="imgp" data-id="${p.id}">صورة</button><button class="btn alt sm" data-a="tgnew" data-id="${p.id}">جديد/عادي</button><button class="btn alt sm" data-a="tgact" data-id="${p.id}">${p.active?"إخفاء":"إظهار"}</button><button class="btn alt sm" data-a="delp" data-id="${p.id}">حذف</button></div></div></div>`).join("");
   if(tab==="c")h=`<h2>إضافة زبون</h2><div class="row"><input id="cn" type="text" placeholder="اسم البقالة"><input id="cc" type="text" inputmode="numeric" placeholder="رمز (6 أرقام+)"></div><input id="cph" type="text" inputmode="tel" autocomplete="off" placeholder="رقم الهاتف (اختياري) مثال: 0612345678"><input id="cad" type="text" autocomplete="off" placeholder="العنوان / الحي (اختياري)"><input id="cnt" type="text" autocomplete="off" placeholder="ملاحظة (اختياري)"><div class="acts"><button class="btn sm" data-a="addc">إضافة</button></div>`+
     adm.c.map(c=>c.id===editCid?editCHtml(c):`<div class="item ${c.active?"":"off"}"><div class="info"><div class="name">${esc(c.name)}</div>${phoneHtml(c)}${infoHtml(c)}<div class="price">الرمز: <b>${esc(c.code)}</b>${c.active?"":" — موقوف"}</div><div class="acts"><button class="btn alt sm" data-a="editc" data-id="${c.id}">تعديل</button><button class="btn alt sm" data-a="codec" data-id="${c.id}">تغيير الرمز</button><button class="btn alt sm" data-a="tgc" data-id="${c.id}">${c.active?"إيقاف":"تفعيل"}</button><button class="btn alt sm" data-a="delc" data-id="${c.id}">حذف</button></div></div></div>`).join("");
+  if(tab==="b")h=`<h2>إضافة بانر</h2><p>صورة عريضة تظهر أعلى الصفحة الرئيسية للزبناء (يفضل 1200×520).</p><input id="bt" type="text" placeholder="عنوان على الصورة (اختياري)"><select id="bcat"><option value="">بدون ربط بصنف</option>${adm.k.map(k=>`<option value="${k.id}">${esc(k.name)}</option>`).join("")}</select><input id="bf" type="file" accept="image/*"><div class="price" id="bfn"></div><div class="acts"><button class="btn sm" data-a="addb">إضافة</button></div>`
+    +(adm.b.map(b=>`<div class="item ${b.active?"":"off"}"><div class="ico" style="width:120px;height:56px"><img src="${esc(b.image_url)}" alt=""></div><div class="info"><div class="name">${esc(b.title||"بدون عنوان")}${b.active?"":" — مخفي"}</div><div class="acts"><button class="btn alt sm" data-a="tgb" data-id="${b.id}">${b.active?"إخفاء":"إظهار"}</button><button class="btn alt sm" data-a="delb" data-id="${b.id}">حذف</button></div></div></div>`).join("")||"<p>لا توجد بانرات بعد.</p>");
   if(tab==="o"){const f=adm.o.filter(o=>ofl==="all"||(ofl==="done")===(o.status==="done")),nn=adm.o.filter(o=>o.status!=="done").length,ofb=`<div class="chips">${[["all","الكل"],["new","الجديدة ("+nn+")"],["done","المسلَّمة"]].map(x=>`<button class="chip ${ofl===x[0]?"on":""}" data-a="ofl" data-v="${x[0]}">${x[1]}</button>`).join("")}</div>`;h=ofb+(f.map(o=>`<div class="item ${o.status==="done"?"off":""}"><div class="info"><div class="name">${esc(o.customers?o.customers.name:"—")} — ${o.total} درهم</div><div class="price">${new Date(o.created_at).toLocaleString("fr-FR")}</div><div>${o.items.map(l=>esc(l.name)+" × "+l.qty).join("<br>")}</div><div class="acts"><button class="btn alt sm" data-a="print" data-id="${o.id}">طباعة</button><button class="btn alt sm" data-a="doneo" data-id="${o.id}">${o.status==="done"?"إرجاع كجديد":"تم التسليم"}</button></div></div></div>`).join("")||"<p>لا توجد طلبات.</p>")}
   app.innerHTML=`<div class="top"><h1>لوحة المدير</h1><div class="acts"><button class="btn alt sm" data-a="toshop">المتجر</button><button class="btn alt sm" data-a="alogout">خروج</button></div></div><div style="margin:6px 0"><button class="btn alt sm" id="pushb" data-a="pushtog">🔔 الإشعارات</button></div><div class="chips">${tabs}</div><div class="err">${esc(msg)}</div>${h}`;pushState();
 }
@@ -407,6 +457,8 @@ function adminView(){
 /* ---------- التشغيل ---------- */
 document.addEventListener("click",e=>{const b=e.target.closest("[data-a]");if(b&&A[b.dataset.a])A[b.dataset.a](b.dataset)});
 document.addEventListener("change",e=>{const t=e.target;if(t.dataset&&t.dataset.cs!==undefined)db(sb.from("products").update({category_id:t.value||null}).eq("id",t.dataset.id))});
+document.addEventListener("change",e=>{const t=e.target;if(t.id!=="kf")return;const n=$("#kfn");n.textContent="جارٍ قراءة الصورة…";heldK=hold(t.files[0]).then(b=>{n.textContent=b?"✓ تم اختيار الصورة":"";return b},()=>{n.textContent="تعذر قراءة الصورة";return null})});
+document.addEventListener("change",e=>{const t=e.target;if(t.id!=="bf")return;const n=$("#bfn");n.textContent="جارٍ قراءة الصورة…";heldB=hold(t.files[0]).then(b=>{n.textContent=b?"✓ تم اختيار الصورة":"";return b},()=>{n.textContent="تعذر قراءة الصورة";return null})});
 document.addEventListener("change",e=>{const t=e.target;if(t.id!=="pf")return;const n=$("#pfn");n.textContent="جارٍ قراءة الصورة…";
   heldP=hold(t.files[0]).then(b=>{n.textContent=b?"✓ تم اختيار الصورة":"";return b},()=>{n.textContent="تعذر قراءة الصورة. التقط صورة جديدة أو اختر ملفا آخر.";return null})});
 document.addEventListener("change",e=>{const t=e.target;if(t.classList&&t.classList.contains("qn")){let v=parseInt(t.value,10);if(!(v>0))v=0;cart[t.dataset.id]=Math.min(500,v);saveCart();upd(t.dataset.id)}});
